@@ -1,0 +1,25 @@
+mybb-captchapack README
+=======================
+Richard Grenville
+9 December 2012
+
+mybb-captchapack is a clone of the Drupal module link:http://drupal.org/project/captcha_pack[CAPTCHA Pack] for MyBB -- or at least, tries to be one.
+
+Dependencies
+------------
+
+* MyBB 1.6.*
+
+* link:http://community.mybb.com/thread-87399.html[>= PluginLibrary 11]
+
+Status
+------
+
+* mybb-captchapack could be considered of pre-alpha quality right now, since I know pretty little about PHP, MySQL, and MyBB, and the tests I've done are few. Usage on productive sites is highly discouraged. For all possible outcomes of using the plugin (including but not limited to burning your CPU, making your monitor explode, or attracting aliens to abduct you) I'm not liable.
+
+* This plugin has only been tested on MySQL. I do not know whether it works on other database engines.
+
+License
+-------
+
+GPL-2+? I copied some code from the original Drupal CAPTCHA Pack module, distributed under GPL-2, notably the ASCII art character code.
