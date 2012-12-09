@@ -19,6 +19,8 @@ Status
 
 * This plugin has only been tested on MySQL. I do not know whether it works on other database engines.
 
+* These CAPTCHAs are in design much easier to break than MyBB default image CAPTCHA or reCAPTCHA. They are good only because they are rarely used.
+
 License
 -------
 

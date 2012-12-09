@@ -44,8 +44,6 @@ function captchapack_info() {
  * cleanup task.
  */
 function captchapack_install() {
-  require_once MYBB_ROOT . 'inc/functions_task.php';
-
   global $db, $PL, $cache;
 
   // PluginLibrary dependency check
@@ -78,6 +76,7 @@ function captchapack_install() {
 
   // Insert task
   // Code stolen from MyBB itself
+  require_once MYBB_ROOT . 'inc/functions_task.php';
   $new_task = array(
     "title" => $db->escape_string('CAPTCHA Pack Cleanup'),
     "description" => $db->escape_string('Clean up old CAPTCHA entries.'),
@@ -208,7 +207,7 @@ EOF
       'type' => array(
         'title' => 'Type of CAPTCHA',
         'description' => '',
-        'optionscode' => "select\nasciiart=asciiart\ncss=css\nroute=route",
+        'optionscode' => "select\nasciiart=asciiart\ncss=css\nroute=route\nunrelatedword=unrelatedword",
         'value' => 'asciiart',
       ),
       'num' => array(
@@ -347,6 +346,10 @@ function captchapack_display() {
     case 'route':
       $opts['tablesize'] = captchapack_gets_num('route_tablesize', 5);
       break;
+    case 'unrelatedword':
+      require_once MYBB_ROOT . 'inc/plugins/captchapack-data.php';
+      $opts['wdgrps'] = captchapack_gen_unrelatedword_data();
+      break;
     }
     $arr_captcha = call_user_func('captchapack_gen_' . $type, $opts);
   }
@@ -396,7 +399,9 @@ function captchapack_validate($reg) {
     // database query. Note this also means changing the CAPTCHA length
     // invalidates existing CAPTCHAs.
     $num = captchapack_gets_num('num', 5);
-    if (!preg_match("/^\w{{$num}}$/", $answer))
+    $type = $mybb->settings['captchapack_type'];
+    if (in_array($type, array('asciiart', 'css', 'route'))
+      && !preg_match("/^\w{{$num}}$/", $answer))
       $reg->set_error('The CAPTCHA code you entered looks incorrect.');
     elseif (!captchapack_dbvalidate($hash, $answer))
       $reg->set_error('The CAPTCHA code you entered is incorrect.');
@@ -517,7 +522,7 @@ function captchapack_gen_route($opts) {
   // ==== Determine options ====
   /// Default options.
   $opts_def = array(
-    'num'         => 8,
+    'num'         => 5,
     'tablesize'   => 5,
     'chars'       => array_merge(range('a', 'z'), range('0', '9')),
     'height'      => 15,
@@ -616,3 +621,53 @@ function captchapack_gen_route($opts) {
   return $captcha;
 }
 
+/**
+ * Generate an unrelated word CAPTCHA.
+ *
+ * @return An associative array of CAPTCHA, with <code>challenge</code>
+ *         member set to a string of the challenge, <code>answer</code>
+ *         set to the answer.
+ */
+function captchapack_gen_unrelatedword($opts) {
+  // ==== Determine options ====
+  /// Default options.
+  $opts_def = array(
+    'num'         => 5,
+    'wdgrps'      => array(),
+  );
+
+  if ($opts)
+    $opts = array_merge($opts_def, $opts);
+  else
+    $opts = $opts_def;
+
+  // ==== Generate the CAPTCHA ====
+  $captcha = array(
+    'challenge' => '',
+    'answer'    => '',
+  );
+
+  if (count($opts['wdgrps']) < 2 || $opts['num'] < 2)
+    return $captcha;
+
+  $wdlst = '';
+  // Pick up the words in the same group
+  $idx = array_rand($opts['wdgrps']);
+  // Yeah, we don't check for duplicate here
+  for ($i = 0; $i < $opts['num'] - 1; ++$i) {
+    $w = $opts['wdgrps'][$idx][array_rand($opts['wdgrps'][$idx])];
+    $wdlst .= "<div class='captchapack-word'>$w</div>";
+  }
+
+  // Now the unique one. Try avoid modifying the original array so PHP
+  // might somehow optimize it
+  $keys = array_diff(array_keys($opts['wdgrps']), array($idx));
+  $idx = $keys[array_rand($keys)];
+  $w = $opts['wdgrps'][$idx][array_rand($opts['wdgrps'][$idx])];
+  $wdlst .= "<div class='captchapack-word'>$w</div>";
+
+  $captcha['challenge'] = $wdlst;
+  $captcha['answer'] = $w;
+
+  return $captcha;
+}

@@ -1587,3 +1587,15 @@ function captchapack_gen_asciiart_data($style) {
 
   return $font;
 }
+
+/**
+ * Return data for unrelated word CAPTCHA.
+ */
+function captchapack_gen_unrelatedword_data() {
+  return array(
+    explode(' ', 'green red blue yellow black white magenta cyan orange violet purple gold brown pink'),
+    explode(' ', 'bird elephant dog cat crocodile lion fish cow horse sheep frog beetle worm spider bat giraffe lizard goat monkey rabbit chimpanzee'),
+    explode(' ', 'head foot shoulder arm leg chest waist neck'),
+  );
+}
+
