@@ -9,12 +9,16 @@
  */
 
 // Disallow direct access to this file for security reasons
-if(!defined("IN_MYBB"))
+if (!defined('IN_MYBB'))
   die("Direct initialization of this file is not allowed.<br /><br />Please make sure IN_MYBB is defined.");
 
 // Shorthand name for PluginLibrary
-if(!defined("PLUGINLIBRARY"))
-  define("PLUGINLIBRARY", MYBB_ROOT . "inc/plugins/pluginlibrary.php");
+if (!defined('PLUGINLIBRARY'))
+  define('PLUGINLIBRARY', MYBB_ROOT . "inc/plugins/pluginlibrary.php");
+
+// Shorthand name for the data file
+if (!defined('CAPTCHAPACK_PATH_DATA'))
+  define('CAPTCHAPACK_PATH_DATA', MYBB_ROOT . "inc/plugins/captchapack/data.php");
 
 // Tell MyBB when to run the hooks
 // $plugins->add_hook("hook name", "function name");
@@ -63,7 +67,7 @@ function captchapack_install() {
 
   // Create table
   $tbl_name = TABLE_PREFIX . 'captcha_captchapack';
-  $db->query("create table `$tbl_name` (
+  $db->write_query("create table `$tbl_name` (
     `hash`      binary(20)    not null,
     `ip`        int unsigned  not null  default '0',
     `dateline`  bigint(30)    not null  default '0',
@@ -72,27 +76,15 @@ function captchapack_install() {
   );");
 
   // Add index to dateline to accelerate CAPTCHA cleanup
-  $db->query("alter table `$tbl_name` add index (`dateline`);");
+  $db->write_query("alter table `$tbl_name` add index (`dateline`);");
 
   // Insert task
-  // Code stolen from MyBB itself
-  require_once MYBB_ROOT . 'inc/functions_task.php';
-  $new_task = array(
-    "title" => $db->escape_string('CAPTCHA Pack Cleanup'),
-    "description" => $db->escape_string('Clean up old CAPTCHA entries.'),
-    "file" => $db->escape_string('captchapack'),
-    "minute" => $db->escape_string('0'),
-    "hour" => $db->escape_string('*'),
-    "day" => $db->escape_string('*'),
-    "month" => $db->escape_string('*'),
-    "weekday" => $db->escape_string('*'),
-    "enabled" => 0,
-    "logging" => 1
-  );
-  $new_task['nextrun'] = fetch_next_run($new_task);
-  $db->insert_query("tasks", $new_task);
-  $cache->update_tasks();
-
+  captchapack_task_add(array(
+    "title"       => 'CAPTCHA Pack Cleanup',
+    "description" => 'Clean up old CAPTCHA entries.',
+    "file"        => 'captchapack',
+    "minute"      => '0',
+  ));
 }
 
 /**
@@ -110,13 +102,13 @@ function captchapack_uninstall() {
 
   // Drop captchapack table
   $tbl_name = TABLE_PREFIX . 'captcha_captchapack';
-  $db->query("drop table `$tbl_name`;");
+  $db->write_query("drop table `$tbl_name`;");
+
+  // Delete settings
+  $PL->settings_delete('captchapack');
 
   // Drop task
-  $db->delete_query('tasks', "file = 'captchapack'");
-
-  // Just in case there's something wrong
-  $db->delete_query('tasks', "title = 'CAPTCHA Pack Cleanup'");
+  captchapack_task_drop('captchapack', 'CAPTCHA Pack Cleanup');
 }
 
 /**
@@ -137,17 +129,16 @@ function captchapack_activate() {
   $PL or require_once PLUGINLIBRARY;
 
   // Create template
-  $lang->load("member");
   $PL->templates('captchapack',
     'CAPTCHA Pack Plugin',
     array('captcha' => <<<EOF
 <br />
 <fieldset class="trow2">
-<legend><strong>{$lang->image_verification}</strong></legend>
-<table cellspacing="0" cellpadding="{$theme['tablespace']}">
+<legend><strong>{\$captchapack_title}</strong></legend>
+<table cellspacing="0" cellpadding="{\$theme['tablespace']}">
 <tr>
-<td><span class="smalltext">{$lang->verification_note}</span></td>
-<td rowspan="2" align="center"><div class="captchapack-captcha{\$captchapack_classes}">{\$captchapack_challenge}</div><br /><span style="color: red;" class="smalltext">{$lang->verification_subnote}</span>
+<td><span class="smalltext">{\$captchapack_desc}</span></td>
+<td rowspan="2" align="center"><div class="captchapack-captcha{\$captchapack_classes}">{\$captchapack_challenge}</div><br /><span style="color: red;" class="smalltext">{\$lang->verification_subnote}</span>
 </td>
 </tr>
 <tr>
@@ -232,11 +223,10 @@ EOF
 
   // Add CAPTCHA to register page template
   require_once MYBB_ROOT . 'inc/adminfunctions_templates.php';
-  find_replace_templatesets("member_register", '#{\$regimage}#', "{\$captchapack}{\$regimage}");
+  find_replace_templatesets("member_register", '#{\$regimage}#', '{\$captchapack}{\$regimage}');
 
   // Enable task
-  $db->update_query('tasks', array('enabled' => 1),
-    "file = 'captchapack'");
+  captchapack_task_enable('captchapack');
 }
 
 /**
@@ -249,16 +239,107 @@ function captchapack_deactivate() {
   // Deactivate stylesheet
   $PL->stylesheet_deactivate('captchapack');
 
-  // Delete settings
-  $PL->settings_delete('captchapack');
-
   // Remove CAPTCHA from register page template
   require_once MYBB_ROOT . 'inc/adminfunctions_templates.php';
   find_replace_templatesets("member_register", '#{\$captchapack}{\$regimage}#', "{\$regimage}");
 
   // Disable task
-  $db->update_query('tasks', array('enabled' => 0),
-    "file = 'captchapack'");
+  captchapack_task_disable('captchapack');
+}
+
+/**
+ * Add a task.
+ *
+ * Code stolen from MyBB itself.
+ */
+function captchapack_task_add($task) {
+  require_once MYBB_ROOT . 'inc/functions_task.php';
+
+  global $db, $cache;
+
+  // Merge default values
+  $task_def = array(
+    'title'       => '',
+    'description' => '',
+    'file'        => '',
+    'minute'      => '*',
+    'hour'        => '*',
+    'day'         => '*',
+    'month'       => '*',
+    'weekday'     => '*',
+    'enabled'     => 0,
+    'logging'     => 1,
+  );
+  $task = array_merge($task_def, $task);
+
+  if (!$task['file'] || !$task['title'])
+    return false;
+
+  // If there's a task with the same title or filename, drop it
+  captchapack_task_drop($task['file'], $task['title']);
+
+  // Escape all the things in the task
+  $task = array(
+    'title'       => $db->escape_string($task['title']),
+    'description' => $db->escape_string($task['description']),
+    'file'        => $db->escape_string($task['file']),
+    'minute'      => $db->escape_string($task['minute']),
+    'hour'        => $db->escape_string($task['hour']),
+    'day'         => $db->escape_string($task['day']),
+    'month'       => $db->escape_string($task['month']),
+    'weekday'     => $db->escape_string($task['weekday']),
+    'enabled'     => (int) $task['enabled'],
+    'logging'     => (int) $task['logging'],
+  );
+
+  // Fill nextrun
+  $task['nextrun'] = fetch_next_run($task);
+
+  // Insert, and update cache
+  $db->insert_query("tasks", $task);
+  $cache->update_tasks();
+
+  return true;
+}
+
+/**
+ * Drop a task.
+ *
+ * Code stolen from MyBB itself.
+ */
+function captchapack_task_drop($file, $title) {
+  global $db, $cache;
+
+  $file = $db->escape_string($file);
+  $title = $db->escape_string($title);
+
+  $db->delete_query('tasks', "file = '$file' or title = '$title'");
+
+  $cache->update_tasks();
+}
+
+/**
+ * Enable a task.
+ *
+ * Code stolen from MyBB itself.
+ */
+function captchapack_task_enable($file) {
+  global $db;
+
+  $file = $db->escape_string($file);
+  $db->update_query('tasks', array('enabled' => 1), "file = '$file'");
+}
+
+/**
+ * Disable a task.
+ *
+ * Code stolen from MyBB itself.
+ */
+function captchapack_task_disable($file) {
+  global $db;
+
+  $file = $db->escape_string($file);
+  $db->update_query('tasks', array('enabled' => 0), "file = '$file'");
 }
 
 /**
@@ -323,7 +404,7 @@ function captchapack_dbvalidate($hash, $answer) {
  * Display callback function.
  */
 function captchapack_display() {
-  global $templates, $captchapack, $mybb;
+  global $templates, $captchapack, $mybb, $lang;
 
   // Quit if it's not enabled
   if (!$mybb->settings['captchapack_enabled'])
@@ -339,7 +420,7 @@ function captchapack_display() {
     // Special options for particular CAPTCHA types
     switch ($type) {
     case 'asciiart':
-      require_once MYBB_ROOT . 'inc/plugins/captchapack-data.php';
+      require_once CAPTCHAPACK_PATH_DATA;
       $opts['data'] = captchapack_gen_asciiart_data(
         $mybb->settings['captchapack_asciiart_style']);
       break;
@@ -347,7 +428,7 @@ function captchapack_display() {
       $opts['tablesize'] = captchapack_gets_num('route_tablesize', 5);
       break;
     case 'unrelatedword':
-      require_once MYBB_ROOT . 'inc/plugins/captchapack-data.php';
+      require_once CAPTCHAPACK_PATH_DATA;
       $opts['wdgrps'] = captchapack_gen_unrelatedword_data();
       break;
     }
@@ -360,6 +441,14 @@ function captchapack_display() {
   captchapack_dbinsert($arr_captcha);
 
   // Display it
+  $lang->load('captchapack');
+  $captchapack_title = '';
+  $captchapack_desc = '';
+  if (isset($lang->{"captchapack_{$type}_title"}))
+    $captchapack_title = $lang->{"captchapack_{$type}_title"};
+  if (isset($lang->{"captchapack_{$type}_desc"}))
+    $captchapack_desc = $lang->{"captchapack_{$type}_desc"};
+
   $captchapack_classes = ' captchapack-captcha-' . $mybb->settings['captchapack_type'];
   $captchapack_challenge = $arr_captcha['challenge'];
   $captchapack_hash = $arr_captcha['hash'];
@@ -377,15 +466,18 @@ function captchapack_validate($reg) {
   if (!$mybb->settings['captchapack_enabled'])
     return;
 
+  // Load error messages
+  $lang->load('captchapack');
+
   // Quit if the hash field is gone
   if (empty($mybb->input['captchapack-hash'])) {
-    $reg->set_error('Hash of the CAPTCHA not found.');
+    $reg->set_error($lang->captchapack_error_no_hash);
     return;
   }
 
   // Quit if hash in invalid
   if (!preg_match('/^[0-9a-f]{40}$/', $mybb->input['captchapack-hash'])) {
-    $reg->set_error('Hash of the CAPTCHA invalid.');
+    $reg->set_error($lang->captchapack_error_invalid_hash);
     return;
   }
 
@@ -402,12 +494,12 @@ function captchapack_validate($reg) {
     $type = $mybb->settings['captchapack_type'];
     if (in_array($type, array('asciiart', 'css', 'route'))
       && !preg_match("/^\w{{$num}}$/", $answer))
-      $reg->set_error('The CAPTCHA code you entered looks incorrect.');
+      $reg->set_error($lang->captchapack_error_invalid_fmt);
     elseif (!captchapack_dbvalidate($hash, $answer))
-      $reg->set_error('The CAPTCHA code you entered is incorrect.');
+      $reg->set_error($lang->captchapack_error_invalid_ans);
   }
   else {
-    $reg->set_error('No valid answer for CAPTCHA.');
+    $reg->set_error($lang->captchapack_error_no_ans);
   };
 
   // Drop all entries with the hash
