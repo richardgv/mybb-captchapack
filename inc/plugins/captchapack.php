@@ -29,7 +29,9 @@ $plugins->add_hook('datahandler_user_validate', 'captchapack_validate');
  * Basic information about the plugin.
  */
 function captchapack_info() {
-  return array(
+  global $plugins_cache;
+
+  $info = array(
     "name"          => "CAPTCHA pack",
     "description"   => "MyBB port of Drupal's CAPTCHA pack.",
     "website"       => "https://github.com/richardgv/mybb-captchapack",
@@ -39,6 +41,16 @@ function captchapack_info() {
     "guid"          => "",
     "compatibility" => "16"
   );
+
+  // Display some extra information when installed and active.
+  if(captchapack_is_installed()
+      && $plugins_cache['active']['captchapack']) {
+    $url = captchapack_get_settings_url('captchapack');
+    if ($url)
+      $info["description"] .= " | <a href=\"{$url}\">Edit settings</a>";
+  }
+
+  return $info;
 }
 
 /**
@@ -210,7 +222,7 @@ EOF
       'asciiart_style' => array(
         'title' => 'ASCII art CAPTCHA style',
         'description' => '',
-        'optionscode' => "select\nroman=roman\nunivers=univers",
+        'optionscode' => "select\nalphabet=alphabet\nbig=big\ncolossal=colossal\ndoh=doh\ndoom=doom\ndotmatrix=dotmatrix\nlarry3d=larry3d\nletters=letters\nmini=mini\nnancyj=nancyj\no8=o8\nogre=ogre\npebbles=pebbles\npuffy=puffy\nroman=roman\nrounded=rounded\nslant=slant\nsmall=small\nsmslant=smslant\nstandard=standard\nstraight=straight\nthick=thick\ntinkertoy=tinkertoy\nunivers=univers",
         'value' => 'roman',
       ),
       'route_tablesize' => array(
@@ -245,6 +257,21 @@ function captchapack_deactivate() {
 
   // Disable task
   captchapack_task_disable('captchapack');
+}
+
+/**
+ * Get URL of a setting group with the specific name.
+ */
+function captchapack_get_settings_url($name) {
+  global $db;
+
+  $name = $db->escape_string($name);
+  $query = $db->simple_select('settinggroups', 'gid', "name = '{$name}'");
+  $result = $db->fetch_array($query);
+  if ($result)
+    return "index.php?module=config-settings&action=change&gid={$result['gid']}";
+  else
+    return '';
 }
 
 /**
