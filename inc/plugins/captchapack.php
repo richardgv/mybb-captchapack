@@ -14,11 +14,11 @@ if (!defined('IN_MYBB'))
 
 // Shorthand name for PluginLibrary
 if (!defined('PLUGINLIBRARY'))
-  define('PLUGINLIBRARY', MYBB_ROOT . "inc/plugins/pluginlibrary.php");
+  define('PLUGINLIBRARY', MYBB_ROOT . 'inc/plugins/pluginlibrary.php');
 
 // Shorthand name for the data file
 if (!defined('CAPTCHAPACK_PATH_DATA'))
-  define('CAPTCHAPACK_PATH_DATA', MYBB_ROOT . "inc/plugins/captchapack/data.php");
+  define('CAPTCHAPACK_PATH_DATA', MYBB_ROOT . 'inc/plugins/captchapack/data.php');
 
 // Tell MyBB when to run the hooks
 // $plugins->add_hook("hook name", "function name");
@@ -206,6 +206,18 @@ EOF
         'title' => 'Enable CAPTCHA Pack CAPTCHA',
         'description' => '',
         'value' => 1,
+      ),
+      'cleanupinterval' => array(
+        'title' => 'CAPTCHA clean up interval',
+        'description' => 'The time we wait before a CAPTCHA expires, in hours.',
+        'optionscode' => 'text',
+        'value' => 1,
+      ),
+      'minresptime' => array(
+        'title' => 'Minimum acceptable response time',
+        'description' => 'The minimum interval after we send out a CAPTCHA before a response of it is considered acceptable, in seconds.',
+        'optionscode' => 'text',
+        'value' => 10,
       ),
       'type' => array(
         'title' => 'Type of CAPTCHA',
@@ -414,6 +426,8 @@ function captchapack_dbdrop($hash) {
 
 /**
  * Validate the record of a CAPTCHA.
+ *
+ * @return the dateline of the matched CAPTCHA record, 0 if not found
  */
 function captchapack_dbvalidate($hash, $answer) {
   global $db;
@@ -422,9 +436,9 @@ function captchapack_dbvalidate($hash, $answer) {
   $answer = $db->escape_string(strtolower($answer));
   $ip = ip2long(get_ip());
   $query = $db->simple_select("captcha_captchapack", "*",
-      "hash = X'{$hash}' AND ip = '{$ip}' and answer = '{$answer}'");
+      "hash = X'{$hash}' and ip = '{$ip}' and answer = '{$answer}'");
   $result = $db->fetch_array($query);
-  return !empty($result['dateline']);
+  return (empty($result['dateline']) ? 0: $result['dateline']);
 }
 
 /**
@@ -520,10 +534,16 @@ function captchapack_validate($reg) {
     $num = captchapack_gets_num('num', 5);
     $type = $mybb->settings['captchapack_type'];
     if (in_array($type, array('asciiart', 'css', 'route'))
-      && !preg_match("/^\w{{$num}}$/", $answer))
+        && !preg_match("/^\w{{$num}}$/", $answer))
       $reg->set_error($lang->captchapack_error_invalid_fmt);
-    elseif (!captchapack_dbvalidate($hash, $answer))
-      $reg->set_error($lang->captchapack_error_invalid_ans);
+    else {
+      $result = captchapack_dbvalidate($hash, $answer);
+      if (!$result)
+        $reg->set_error($lang->captchapack_error_invalid_ans);
+      elseif (captchapack_gets_num('minresptime', 0)
+          && $result > (TIME_NOW - captchapack_gets_num('minresptime', 0)))
+        $reg->set_error($lang->captchapack_error_too_fast);
+    }
   }
   else {
     $reg->set_error($lang->captchapack_error_no_ans);

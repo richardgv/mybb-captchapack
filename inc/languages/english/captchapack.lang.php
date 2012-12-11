@@ -18,6 +18,7 @@ $l['captchapack_error_no_ans']        = 'No answer for CAPTCHA.';
 $l['captchapack_error_invalid_hash']  = 'Hash of the CAPTCHA invalid.';
 $l['captchapack_error_invalid_fmt']   = 'The CAPTCHA code you entered looks incorrect.';
 $l['captchapack_error_invalid_ans']   = 'The CAPTCHA code you entered is incorrect.';
+$l['captchapack_error_too_fast']      = 'You filled the form too fast!';
 
 // ASCII art CAPTCHA
 $l['captchapack_asciiart_title']      = 'ASCII art CAPTCHA';
