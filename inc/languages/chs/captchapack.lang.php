@@ -35,3 +35,7 @@ $l['captchapack_route_desc']          = '请在下面文本框内输入右边显
 // Unrelated word CAPTCHA
 $l['captchapack_unrelatedword_title'] = '不相关单词验证码';
 $l['captchapack_unrelatedword_desc']  = '请在下面文本框内输入右边的单词中不相关的一个。这个步骤用于防止自动注册。';
+
+// Replacement CAPTCHA
+$l['captchapack_replacement_title'] = '字符替换验证码';
+$l['captchapack_replacement_desc']  = '请按照右边显示的规则替换右面字符串中的字符，并将结果输入到下面文本框中。这个步骤用于防止自动注册。';

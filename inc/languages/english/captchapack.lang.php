@@ -36,3 +36,7 @@ $l['captchapack_route_desc']          = 'Please enter the text in the graph (fol
 $l['captchapack_unrelatedword_title'] = 'Unrelated word CAPTCHA';
 $l['captchapack_unrelatedword_desc']  = 'Please enter the unrelated word in the group of words into the text box below it. This process is used to prevent automated signups.';
 
+// Replacement CAPTCHA
+$l['captchapack_replacement_title'] = 'Replacement CAPTCHA';
+$l['captchapack_replacement_desc']  = 'Please replace the characters in the string on the right side according to the rules below, and enter the result into the text box below it. This process is used to prevent automated signups.';
+

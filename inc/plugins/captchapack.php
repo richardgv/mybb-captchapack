@@ -222,7 +222,7 @@ EOF
       'type' => array(
         'title' => 'Type of CAPTCHA',
         'description' => '',
-        'optionscode' => "select\nasciiart=asciiart\ncss=css\nroute=route\nunrelatedword=unrelatedword",
+        'optionscode' => "select\nasciiart=asciiart\ncss=css\nroute=route\nunrelatedword=unrelatedword\nreplacement=replacement",
         'value' => 'asciiart',
       ),
       'num' => array(
@@ -807,6 +807,67 @@ function captchapack_gen_unrelatedword($opts) {
 
   $captcha['challenge'] = $wdlst;
   $captcha['answer'] = $w;
+
+  return $captcha;
+}
+
+/**
+ * Generate a replacement CAPTCHA.
+ *
+ * @return An associative array of CAPTCHA, with <code>challenge</code>
+ *         member set to a string of the challenge, <code>answer</code>
+ *         set to the answer.
+ */
+function captchapack_gen_replacement($opts = NULL) {
+  // ==== Determine options ====
+  /// Default options.
+  $opts_def = array(
+    'num'     => 5,
+    'chars'   => array_merge(range('a', 'z'), range('0', '9')),
+  );
+  if ($opts)
+    $opts = array_merge($opts_def, $opts);
+  else
+    $opts = $opts_def;
+
+  // ==== Generate the CAPTCHA ====
+  $captcha = array(
+    'challenge' => '',
+    'answer'    => '',
+  );
+  $symbols = $opts['chars'];
+
+  // Generate the elements and rules
+  $destsymbols = $symbols;
+  $elements = array();
+  $answers = array();
+  $rules = array();
+  for ($i = 0; $i < $opts['num']; ++$i) {
+    // Fail if we have no more characters left
+    if (!$symbols)
+      return $captcha;
+    $ele = $symbols[array_rand($symbols)];
+    $elements[] = $ele;
+    $destsymbols = array_diff($destsymbols, array($ele));
+    if (!isset($rules[$ele])) {
+      if (!$destsymbols)
+        return $captcha;
+      $rep = $destsymbols[array_rand($destsymbols)];
+      $rules[$ele] = $rep;
+      // Disallow destination of a rule to become source somewhere
+      $symbols = array_diff($symbols, array($rep));
+    }
+    $answers[] = $rules[$ele];
+  }
+
+  // Form CAPTCHA
+  $rstr = array();
+  foreach ($rules as $key => $val)
+    $rstr[] = "<div class='captchapack-replacement-rule'>Replace $key with $val;</div>";
+  shuffle($rstr);
+
+  $captcha['challenge'] = '<div class="captchapack-replacement-elements">' . implode($elements) .  '</div>' . implode($rstr);
+  $captcha['answer'] = implode($answers);
 
   return $captcha;
 }
