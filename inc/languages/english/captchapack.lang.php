@@ -40,3 +40,7 @@ $l['captchapack_unrelatedword_desc']  = 'Please enter the unrelated word in the 
 $l['captchapack_replacement_title'] = 'Replacement CAPTCHA';
 $l['captchapack_replacement_desc']  = 'Please replace the characters in the string on the right side according to the rules below, and enter the result into the text box below it. This process is used to prevent automated signups.';
 
+// Math CAPTCHA
+$l['captchapack_math_title'] = 'Math CAPTCHA';
+$l['captchapack_math_desc']  = 'Please enter the result of the math expression (in Arabic numerals) into the text box below it. This process is used to prevent automated signups.';
+

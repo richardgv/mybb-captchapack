@@ -222,7 +222,7 @@ EOF
       'type' => array(
         'title' => 'Type of CAPTCHA',
         'description' => '',
-        'optionscode' => "select\nasciiart=asciiart\ncss=css\nroute=route\nunrelatedword=unrelatedword\nreplacement=replacement",
+        'optionscode' => "select\nasciiart=asciiart\ncss=css\nroute=route\nunrelatedword=unrelatedword\nreplacement=replacement\nmath=math",
         'value' => 'asciiart',
       ),
       'num' => array(
@@ -402,7 +402,7 @@ function captchapack_gets_num($key, $default) {
 function captchapack_dbinsert($captcha) {
   global $db;
 
-  if (!$captcha['challenge'] || !$captcha['answer'])
+  if ('' === $captcha['challenge'] || '' === $captcha['answer'])
     return;
 
   $ip = ip2long(get_ip());
@@ -525,7 +525,8 @@ function captchapack_validate($reg) {
   // Validate
   $hash = $mybb->input['captchapack-hash'];
 
-  if (!empty($mybb->input['captchapack-answer'])) {
+  if (isset($mybb->input['captchapack-answer'])
+      && '' !== $mybb->input['captchapack-answer']) {
     $answer = trim($mybb->input['captchapack-answer']);
 
     // Filter out answers that don't follow the correct format to save one
@@ -868,6 +869,115 @@ function captchapack_gen_replacement($opts = NULL) {
 
   $captcha['challenge'] = '<div class="captchapack-replacement-elements">' . implode($elements) .  '</div>' . implode($rstr);
   $captcha['answer'] = implode($answers);
+
+  return $captcha;
+}
+
+/**
+ * Returns the English representation of a number.
+ *
+ * Currently only values < 1000 are supported.
+ */
+function captchapack_numtoeng($num) {
+  $predefs = array(
+    0 => 'zero',
+    1 => 'one',   2 => 'two',   3 => 'three',   4 => 'four',  5 => 'five',
+    6 => 'six',   7 => 'seven', 8 => 'eight',   9 => 'nine',  10 => 'ten',
+    11 => 'eleven', 12 => 'twelve', 13 => 'thirteen', 14 => 'fourteen',
+    15 => 'fifteen', 16 => 'sixteen', 17 => 'seventeen', 18 => 'eighteen',
+    19 => 'ninteen', 20 => 'twenty', 30 => 'thirty', 40 => 'fourty',
+    50 => 'fifty', 60 => 'sixty', 70 => 'seventy', 80 => 'eighty',
+    90 => 'ninty'
+  );
+
+  // Handle negative values
+  $prefix = '';
+  if ($num < 0) {
+    $prefix = 'minus ';
+    $num = - $num;
+  }
+
+  // Directly look for the value
+  if (isset($predefs[$num]))
+    return $prefix . $predefs[$num];
+
+  // For values larger than 100
+  if ($num >= 100) {
+    $prefix .= captchapack_numtoeng((int) ($num / 100)) . ' hundred' .
+      ((int) ($num / 100) > 1 ? 's': '');
+    $num %= 100;
+    if ($num)
+      return $prefix . ' and ' . captchapack_numtoeng($num);
+    else
+      return $prefix;
+  }
+
+  // For values in 20-99
+  if ($num > 20) {
+    return $prefix . $predefs[((int) ($num / 10)) * 10] . '-' .
+      $predefs[$num % 10];
+  }
+
+  return '';
+}
+
+/**
+ * Generate a math CAPTCHA.
+ *
+ * @return An associative array of CAPTCHA, with <code>challenge</code>
+ *         member set to a string of the challenge, <code>answer</code>
+ *         set to the answer.
+ */
+function captchapack_gen_math($opts = NULL) {
+  // ==== Generate the CAPTCHA ====
+  $captcha = array(
+    'challenge' => '',
+    'answer'    => '',
+    'limit'     => 99,
+  );
+
+  // Generate the math expression
+  $ops = array('+', '-', '*', '/');
+  $op = $ops[array_rand($ops)];
+  $opr1 = 0;
+  $opr2 = 0;
+  $ans = 0;
+  $lmt = $captcha['limit'];
+  switch ($op) {
+  case '+':
+  case '-':
+    $opr1 = mt_rand(- $lmt, $lmt);
+    // To avoid confusions, the second operand must not be negative
+    $opr2 = mt_rand(max(- $lmt - $opr1, - $lmt), min($lmt - $opr1, $lmt));
+    $ans = $opr1 + $opr2;
+    if ($opr2 < 0) {
+      $op = '-';
+      $opr2 = - $opr2;
+    }
+    else {
+      $op = '+';
+    }
+    break;
+  case '*':
+    $l = (int) ($lmt / 5);
+    $opr1 = mt_rand(- $l, $l);
+    $l = ($opr1 ? (int) ($lmt / abs($opr1)): $lmt);
+    $opr2 = mt_rand(- $l, $l);
+    $ans = $opr1 * $opr2;
+    break;
+  case '/':
+    // Keep both values positive to avoid confusions
+    $opr2 = mt_rand(1, (int) ($lmt / 5));
+    $opr1 = $opr2 * mt_rand(0, (int) ($lmt / $opr2));
+    $ans = $opr1 / $opr2;
+    break;
+  }
+
+  // Form CAPTCHA
+  $opr1 = captchapack_numtoeng($opr1);
+  $opr2 = captchapack_numtoeng($opr2);
+  $captcha['challenge'] = "$opr1 $op $opr2 = ?";
+  $captcha['answer'] = $ans;
 
   return $captcha;
 }
