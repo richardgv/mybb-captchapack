@@ -38,7 +38,7 @@ function captchapack_info() {
     "author"        => "Richard Grenville",
     "authorsite"    => "https://github.com/richardgv",
     "version"       => "0.0_dev20121219",
-    "guid"          => "",
+    "guid"          => "6c8bdc75978eea89ad7a3a9aa9305eff",
     "compatibility" => "16"
   );
 
