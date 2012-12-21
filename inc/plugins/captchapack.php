@@ -37,7 +37,7 @@ function captchapack_info() {
     "website"       => "https://github.com/richardgv/mybb-captchapack",
     "author"        => "Richard Grenville",
     "authorsite"    => "https://github.com/richardgv",
-    "version"       => "20121209-git",
+    "version"       => "0.0_dev20121219",
     "guid"          => "",
     "compatibility" => "16"
   );
